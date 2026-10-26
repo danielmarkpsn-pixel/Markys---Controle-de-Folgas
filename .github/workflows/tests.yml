@@ -1,1 +1,83 @@
-1
+name: Testes e validação
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - run: node --check frontend/app.js
+      - run: python -m compileall -q backend tests scripts/backup.py scripts/import-laravel-sqlite.py scripts/build-icon.py run_markys.py
+      - run: python -m pytest -q
+
+  windows-installer:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências e PyInstaller
+        run: python -m pip install -r requirements.txt pyinstaller pillow
+      - name: Gerar ícone da aplicação
+        run: python scripts/build-icon.py
+      - name: Empacotar aplicação
+        shell: pwsh
+        run: >
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --noconsole --name MARKYS
+          --icon assets/markys.ico
+          --add-data "frontend;frontend"
+          --collect-all uvicorn --collect-all fastapi --collect-all starlette
+          --collect-all sqlalchemy --collect-all psycopg --collect-all dotenv
+          --collect-all itsdangerous --collect-all webview --collect-all pythonnet --collect-all clr_loader run_markys.py
+      - name: Testar executável empacotado
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:LOCALAPPDATA "MARKYS"
+          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+          $env:MARKYS_PORT = "8765"
+          $env:MARKYS_NO_BROWSER = "1"
+          $out = Join-Path $env:TEMP "markys-smoke-out.log"
+          $err = Join-Path $env:TEMP "markys-smoke-err.log"
+          $proc = Start-Process -FilePath "dist\MARKYS\MARKYS.exe" -WorkingDirectory $dataDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 45; $i++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { break }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 2
+                if ($health.status -eq "ok") { $ready = $true; break }
+              } catch {}
+            }
+            if (-not $ready) {
+              if (Test-Path $out) { Get-Content $out }
+              if (Test-Path $err) { Get-Content $err }
+              throw "O executável empacotado não iniciou ou não respondeu ao health check."
+            }
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+      - name: Instalar Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Gerar instalador
+        shell: pwsh
+        run: '$iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"; & $iscc installer\markys.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MARKYS-Controle-de-Folgas-Setup
+          path: dist-installer/*.exe
+          if-no-files-found: error
+          retention-days: 14
