@@ -408,3 +408,6 @@ a,.lock-icon{color:#2869b2}
  .home-stats>div{padding:18px}
 }
 
+
+#unit-setup-panel>p:not(.login-footnote){color:#60748a;line-height:1.6;text-align:center;margin:0 0 18px}
+#unit-setup-panel .login-form{margin-top:18px}
