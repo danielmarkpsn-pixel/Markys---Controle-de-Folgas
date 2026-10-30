@@ -39,12 +39,25 @@ function clearEmployeeForm() {
   $("#employee-cancel-edit")?.classList.add("hidden");
 }
 async function boot() {
+  const unit=await api("/api/unit");
+  const unitPanel=$("#unit-setup-panel");
+  const loginPanel=$("#login-panel");
+  const appContent=$("#app-content");
+  if(!unit.configured) {
+    unitPanel?.classList.remove("hidden");
+    loginPanel?.classList.add("hidden");
+    appContent?.classList.add("hidden");
+    $("#logout")?.classList.add("hidden");
+    $("#status").textContent="Identifique esta unidade";
+    return;
+  }
+  unitPanel?.classList.add("hidden");
   const state=await api("/api/auth/status");
   window.__username=state.username; window.__role=state.role;
   $("#login-panel").classList.toggle("hidden",state.authenticated);
   $("#app-content").classList.toggle("hidden",!state.authenticated);
   $("#logout").classList.toggle("hidden",!state.authenticated);
-  $("#status").textContent=state.authenticated ? "Conectado: "+state.username+" ("+state.role+")" : "Acesso restrito";
+  $("#status").textContent=unit.name+" • "+(state.authenticated ? "Conectado: "+state.username+" ("+state.role+")" : "Acesso restrito");
   
   document.querySelectorAll(".admin-only").forEach(el=>el.classList.toggle("hidden",state.role!=="admin"));
   if(state.authenticated) { setHomePanel(); await refresh(); }
@@ -174,6 +187,15 @@ submit("#user-form","/api/users",v=>({username:v.username,password:v.password,ro
 const rememberedLogin=localStorage.getItem("markys_remembered_login")||"";
 $("#login-cpf").value=rememberedLogin;
 $("#remember-login").checked=Boolean(rememberedLogin);
+$("#unit-setup-form").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const form=ev.currentTarget;
+  const name=String(new FormData(form).get("name")||"").trim();
+  try {
+    await api("/api/unit",{method:"POST",body:JSON.stringify({name})});
+    await boot();
+  } catch(e) { $("#unit-setup-error").textContent=e.message; }
+});
 $("#login-form").addEventListener("submit",async ev=>{ev.preventDefault();const formElement=ev.currentTarget;$("#login-error").className="error";$("#login-error").style.color="";const v=Object.fromEntries(new FormData(formElement).entries());v.username=$("#login-cpf").value.trim();try{await api("/api/auth/login",{method:"POST",body:JSON.stringify(v)});if($("#remember-login").checked)localStorage.setItem("markys_remembered_login",v.username);else localStorage.removeItem("markys_remembered_login");formElement.reset();await boot()}catch(e){$("#login-error").textContent=e.message}});
 $("#forgot-password-link").addEventListener("click",ev=>{ev.preventDefault();$("#forgot-password-help").classList.toggle("hidden");});
 $("#register-link").addEventListener("click",ev=>{ev.preventDefault();$("#registration-area").classList.toggle("hidden");if(!$("#registration-area").classList.contains("hidden"))$("#registration-area").scrollIntoView({behavior:"smooth",block:"nearest"});});
