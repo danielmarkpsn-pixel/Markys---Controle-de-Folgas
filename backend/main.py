@@ -12,7 +12,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
-from .database import Base, engine, get_db
+from .database import Base, engine, get_db, DATA_DIR
 from .models import Employee, LeaveType, LeaveGrant, LeaveHistory, LeaveLimit, User, AuditLog, LoginAttempt, Cbo, Unit, Council, State, Municipality, Agency, Contract, Sector, Team
 from .schema_upgrade import upgrade_legacy_schema
 
@@ -239,6 +239,38 @@ def home():
 @app.get("/api/health")
 def health():
     return {"status":"ok", "application":"MARKYS Controle de Folgas", "version":"0.4.0"}
+
+@app.get("/api/unit")
+def get_unit():
+    config_path = DATA_DIR / "unit.json"
+    if not config_path.exists():
+        return {"configured": False, "name": None}
+    try:
+        import json
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        name = str(data.get("name", "")).strip()
+        return {"configured": bool(name), "name": name or None}
+    except (OSError, ValueError, TypeError):
+        return {"configured": False, "name": None}
+
+class UnitSetupIn(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+
+@app.post("/api/unit")
+def save_unit(payload: UnitSetupIn):
+    import json
+    import re
+    config_path = DATA_DIR / "unit.json"
+    if config_path.exists():
+        raise HTTPException(409, "A unidade já foi identificada neste computador.")
+    name = re.sub(r"\s+", " ", payload.name)
+    if len(name) < 2:
+        raise HTTPException(422, "Informe um nome de unidade válido.")
+    temporary = config_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"name": name}, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(config_path)
+    return {"configured": True, "name": name}
+
 
 @app.get("/api/auth/status")
 def auth_status(request: Request, db: Session = Depends(get_db)):
