@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from .database import Base, engine, get_db
-from .models import Employee, LeaveType, LeaveGrant, LeaveHistory, LeaveLimit, User, AuditLog, LoginAttempt, Cbo, Unit, Council, State, Municipality, Agency, Contract, Sector, Team, BankHourEntry
+from .models import Employee, LeaveType, LeaveGrant, LeaveHistory, LeaveLimit, User, AuditLog, LoginAttempt, Cbo, Unit, Council, State, Municipality, Agency, Contract, Sector, Team
 from .schema_upgrade import upgrade_legacy_schema
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
@@ -69,7 +69,6 @@ def seed_default_leave_types():
         ("TRE", "Folga relacionada ao TRE", 1825),
         ("Campanha", "Folga por campanha", 45),
         ("Natalícia", "Folga natalícia", 365),
-        ("Banco de Horas", "Folga gerada pela conversão de horas trabalhadas", 45),
         ("Doação de Sangue", "Folga por doação de sangue", 45),
     ]
     from sqlalchemy.orm import Session as DbSession
@@ -83,6 +82,9 @@ def seed_default_leave_types():
                 existing_type.description = description
                 existing_type.days_validity = validity
                 existing_type.active = True
+        discontinued_bank_type = db.scalar(select(LeaveType).where(LeaveType.name == "Banco de Horas"))
+        if discontinued_bank_type is not None:
+            discontinued_bank_type.active = False
         db.commit()
 
 @app.on_event("startup")
@@ -230,11 +232,6 @@ class UseIn(BaseModel):
 class LimitIn(BaseModel):
     category: str = Field(min_length=1, max_length=100)
     daily_limit: int | None = Field(default=None, ge=0, le=10000)
-class BankHourIn(BaseModel):
-    employee_id: int
-    entry_date: date
-    hours: Decimal = Field(gt=0, multiple_of=1, max_digits=8, decimal_places=2)
-
 @app.get("/")
 def home():
     return FileResponse(ROOT / "frontend" / "index.html")
@@ -650,47 +647,6 @@ def save_limit(payload: LimitIn, request: Request, user: User = Depends(admin_us
     return {"category":item.category,"daily_limit":item.daily_limit}
 
 
-@app.get("/api/bank-hours")
-def list_bank_hours(employee_id: int | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    stmt = select(BankHourEntry).join(Employee).order_by(BankHourEntry.entry_date.desc(), BankHourEntry.id.desc())
-    if employee_id is not None: stmt = stmt.where(BankHourEntry.employee_id == employee_id)
-    entries = db.scalars(stmt).all()
-    return [{"id":x.id,"employee_id":x.employee_id,"employee":x.employee.name,"entry_date":x.entry_date.isoformat(),
-             "hours":float(x.hours),"created_by":x.created_by} for x in entries]
-
-@app.post("/api/bank-hours", status_code=201)
-def create_bank_hours(payload: BankHourIn, request: Request, user: User = Depends(admin_user), db: Session = Depends(get_db)):
-    employee = db.get(Employee, payload.employee_id)
-    if not employee or not employee.active: raise HTTPException(404, "Funcionário ativo não encontrado.")
-    if not employee.weekly_hours or not str(employee.weekly_hours).isdigit() or int(employee.weekly_hours) <= 0:
-        raise HTTPException(422, "Cadastre a carga horária semanal do funcionário antes de lançar horas.")
-    db.add(BankHourEntry(employee_id=employee.id, entry_date=payload.entry_date, hours=payload.hours, created_by=user.username))
-    db.flush()
-    entries = db.scalars(select(BankHourEntry).where(BankHourEntry.employee_id == employee.id).order_by(BankHourEntry.entry_date, BankHourEntry.id)).all()
-    # Uma folga corresponde a um dia de trabalho: carga semanal dividida por cinco dias úteis.
-    workload = Decimal(str(int(employee.weekly_hours))) / Decimal("5")
-    total = sum((Decimal(str(x.hours)) for x in entries), Decimal("0"))
-    generated = int(total // workload)
-    # Converte cada carga horária completa em uma folga e mantém apenas o saldo de horas.
-    prior_generated = sum(1 for x in entries if x.id != entries[-1].id and getattr(x, "_converted", False))
-    # Recalcula folgas geradas a partir do total de horas já lançado, sem apagar o histórico de horas.
-    existing_bank_type = db.scalar(select(LeaveType).where(LeaveType.name == "Banco de Horas"))
-    if existing_bank_type is None:
-        existing_bank_type = LeaveType(name="Banco de Horas", description="Folga gerada pela conversão de horas trabalhadas", days_validity=365)
-        db.add(existing_bank_type); db.flush()
-    existing_generated = db.scalar(select(func.count()).select_from(LeaveGrant).where(
-        LeaveGrant.employee_id == employee.id, LeaveGrant.leave_type_id == existing_bank_type.id,
-        LeaveGrant.description.like("Conversão automática de banco de horas%"))) or 0
-    to_create = max(0, generated - existing_generated)
-    for n in range(to_create):
-        db.add(LeaveGrant(employee_id=employee.id, leave_type_id=existing_bank_type.id,
-            description=f"Conversão automática de banco de horas ({n + existing_generated + 1})",
-            event_date=payload.entry_date, total_amount=Decimal("1"), available_amount=Decimal("1"), created_by=user.username))
-    audit(db, request, "CREATE", "bank_hours", entries[-1].id, f"{payload.hours} horas; total acumulado={total}; folgas geradas={generated}")
-    db.commit()
-    return {"ok":True,"total_hours":float(total),"workload_hours":float(workload),
-            "generated_leaves":generated,"remaining_hours":float(total % workload)}
-
 @app.get("/api/balances")
 def balances(user: User = Depends(current_user), db: Session = Depends(get_db)):
     rows=[]; today=date.today()
@@ -698,7 +654,7 @@ def balances(user: User = Depends(current_user), db: Session = Depends(get_db)):
         grants=db.scalars(select(LeaveGrant).where(LeaveGrant.employee_id==e.id)).all()
         for g in grants:
             end=g.event_date+timedelta(days=g.leave_type.days_validity)
-            if Decimal(str(g.available_amount)) > 0 and today <= end:
+            if g.leave_type.active and Decimal(str(g.available_amount)) > 0 and today <= end:
                 rows.append({"employee_id":e.id,"employee":e.name,"category":e.category,"leave_type":g.leave_type.name,
                              "event_date":g.event_date.isoformat(),"valid_until":end.isoformat(),"balance":float(g.available_amount)})
     return rows
