@@ -109,7 +109,6 @@ async function refresh() {
     });
     table("#audit-list",["Data","Usuário","Ação","Entidade","ID","Detalhe"],audit.map(a=>[a.created_at,a.username,a.action,a.entity,a.entity_id??"—",a.detail||"—"]));
   }
-  try{const entries=await api("/api/bank-hours");window.__bankHours=entries;table("#bank-hours-list",["Funcionário","Data","Quantidade de horas","Lançado por"],entries.slice(0,10).map(x=>[x.employee,x.entry_date,Number(x.hours),x.created_by]))}catch(e){console.warn(e)}
   $("#status").textContent="Conectado: "+window.__username+" ("+window.__role+")";
  } catch(e) { $("#status").textContent="Falha ao carregar: "+(e.message||"verifique o servidor"); console.error("Falha ao atualizar MARKYS:",e); }
 }
@@ -165,8 +164,6 @@ $("#new-request-open").addEventListener("click",()=>{const sel=$("#request-grant
 $("#request-cancel").addEventListener("click",()=>{$("#request-form").reset();$("#request-form").classList.add("hidden")});
 $("#request-grant").addEventListener("change",()=>{const g=(window.__grants||[]).find(x=>x.id===Number($("#request-grant").value));$("#request-event-date").value=g?.event_date||"";$("#request-valid-until").value=g?.valid_until||"";});
 $("#request-form").addEventListener("submit",async ev=>{ev.preventDefault();if(window.__role!=="admin")return;const v=Object.fromEntries(new FormData(ev.currentTarget).entries());try{await api("/api/history",{method:"POST",body:JSON.stringify({grant_id:Number(v.grant_id),leave_date:v.leave_date,requested_at:v.requested_at,quantity:Number(v.quantity),shift:v.shift})});$("#request-form").reset();$("#request-form").classList.add("hidden");await refresh();alert("Solicitação registrada com sucesso.")}catch(e){alert(e.message)}});
-$("#bank-employee").addEventListener("change",()=>{const emp=(window.__employees||[]).find(e=>e.id===Number($("#bank-employee").value));$("#bank-weekly-hours").value=emp?.weekly_hours?emp.weekly_hours+" h/semana":"Não informado"});
-$("#bank-hours-form").addEventListener("submit",async ev=>{ev.preventDefault();if(window.__role!=="admin")return;const form=ev.currentTarget;const v=Object.fromEntries(new FormData(form).entries());const now=new Date();const localDate=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("-");try{const result=await api("/api/bank-hours",{method:"POST",body:JSON.stringify({employee_id:Number(v.employee_id),entry_date:localDate,hours:Number(v.hours)})});const hoursLaunched=Number(v.hours);form.reset();$("#bank-weekly-hours").value="";$("#bank-generated").value="0";$("#bank-employee").value="";try{await refresh();}catch(refreshError){console.warn("Lançamento salvo, mas a atualização da lista falhou:",refreshError);}alert(hoursLaunched+" hora(s) lançada(s) com sucesso!\nTotal acumulado: "+result.total_hours+" h.\nFolgas geradas: "+result.generated_leaves+".\nSaldo de horas: "+result.remaining_hours+" h.");}catch(e){alert(e.message)}});
 
 
 $("#history-filter").addEventListener("submit",ev=>{ev.preventDefault();refresh()});
@@ -192,3 +189,4 @@ api("/api/auth/status").then(s=>{window.__username=s.username;window.__role=s.ro
 
 // Padroniza campos de texto em maiúsculas sem alterar senhas nem o valor técnico de campos ocultos.
 document.addEventListener("input",ev=>{const el=ev.target;if(!(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement))return;if(["password","hidden"].includes(el.type)||el.readOnly||el.disabled)return;const start=el.selectionStart,end=el.selectionEnd;const upper=el.value.toLocaleUpperCase("pt-BR");if(el.value!==upper){el.value=upper;try{el.setSelectionRange(start,end)}catch(_){}}});
+
