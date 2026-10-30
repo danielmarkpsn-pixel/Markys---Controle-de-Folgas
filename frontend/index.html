@@ -5,6 +5,17 @@
 <header><img class="brand-logo" src="/static/logo.svg" alt="MARKYS — Controle de Folgas"><div class="header-actions"><span class="status" id="status">Conectando…</span><button id="logout" class="secondary hidden">Sair</button></div></header>
 <main>
 <section class="intro"><div><p class="eyebrow">MARKYS CONTROLE DE FOLGAS</p><h1>Bem-vindo</h1></div></section>
+<section id="unit-setup-panel" class="panel login-panel active hidden">
+<img class="login-logo" src="/static/logo.svg" alt="MARKYS — Controle de Folgas">
+<h2>Identificação da Unidade</h2>
+<p>Informe o nome desta unidade. Essa identificação será salva neste computador e não será solicitada novamente.</p>
+<form id="unit-setup-form" class="login-form">
+<label>Nome da Unidade<input name="name" id="unit-name" required minlength="2" maxlength="100" autocomplete="organization" placeholder="Ex.: Unidade Manaus"></label>
+<button class="login-submit" type="submit">Salvar unidade e continuar</button>
+</form>
+<p id="unit-setup-error" class="error" role="alert" aria-live="polite"></p>
+<p class="login-footnote">Os dados desta unidade ficam armazenados separadamente neste computador.</p>
+</section>
 <section id="login-panel" class="panel login-panel active">
 <img class="login-logo" src="/static/logo.svg" alt="MARKYS — Controle de Folgas">
 <h2>Entrar no Sistema</h2>
