@@ -239,7 +239,8 @@ def home():
 @app.get("/api/health")
 def health():
     return {"status":"ok", "application":"MARKYS Controle de Folgas", "version":"0.4.0"}
-\n@app.get("/api/unit")
+
+@app.get("/api/unit")
 def get_unit():
     config_path = DATA_DIR / "unit.json"
     if not config_path.exists():
