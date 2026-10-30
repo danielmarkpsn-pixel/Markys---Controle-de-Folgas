@@ -411,3 +411,6 @@ a,.lock-icon{color:#2869b2}
 
 #unit-setup-panel>p:not(.login-footnote){color:#60748a;line-height:1.6;text-align:center;margin:0 0 18px}
 #unit-setup-panel .login-form{margin-top:18px}
+
+
+.dashboard-unit-label{display:inline-flex;align-items:center;width:max-content;margin:8px 0 4px;padding:7px 12px;border:1px solid #c9dff2;border-radius:999px;background:#eaf4fc;color:#245d91;font-size:12px;font-weight:800;letter-spacing:.04em}
