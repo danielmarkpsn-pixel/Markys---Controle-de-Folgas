@@ -262,7 +262,7 @@ def save_unit(payload: UnitSetupIn):
     config_path = DATA_DIR / "unit.json"
     if config_path.exists():
         raise HTTPException(409, "A unidade já foi identificada neste computador.")
-    name = re.sub(r"\\s+", " ", payload.name).strip()
+    name = re.sub(r"\s+", " ", payload.name)
     if len(name) < 2:
         raise HTTPException(422, "Informe um nome de unidade válido.")
     temporary = config_path.with_suffix(".tmp")
