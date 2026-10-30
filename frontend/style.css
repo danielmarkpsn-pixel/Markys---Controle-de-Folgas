@@ -226,9 +226,6 @@ table{font-size:12px}th{background:#edf4fa;color:#536e86}td{padding:10px 12px}
 #employee-form .employee-submit-row{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
 #employee-form #employee-save{min-width:220px}
 #employee-form #employee-cancel-edit{min-width:150px}
-#bank-hours-form{align-items:end}
-#bank-hours-form button{min-height:40px;padding:10px 20px;white-space:nowrap}
-#bank-hours-list{margin-top:18px}
 #request-date{cursor:text}
 
 
@@ -410,3 +407,4 @@ a,.lock-icon{color:#2869b2}
  .workspace .panel{padding:17px}
  .home-stats>div{padding:18px}
 }
+
