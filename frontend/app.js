@@ -58,6 +58,7 @@ async function boot() {
   $("#app-content").classList.toggle("hidden",!state.authenticated);
   $("#logout").classList.toggle("hidden",!state.authenticated);
   $("#status").textContent=unit.name+" • "+(state.authenticated ? "Conectado: "+state.username+" ("+state.role+")" : "Acesso restrito");
+  const dashboardUnit=$("#dashboard-unit-label"); if(dashboardUnit) dashboardUnit.textContent="UNIDADE: "+unit.name;
   
   document.querySelectorAll(".admin-only").forEach(el=>el.classList.toggle("hidden",state.role!=="admin"));
   if(state.authenticated) { setHomePanel(); await refresh(); }
